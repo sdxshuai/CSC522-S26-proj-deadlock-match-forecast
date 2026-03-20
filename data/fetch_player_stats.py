@@ -51,7 +51,7 @@ log = logging.getLogger(__name__)
 BASE_URL = "https://api.deadlock-api.com/v1"
 MATCHES_DIR = Path("data/raw/matches")
 PLAYER_STATS_DIR = Path("data/raw/player_stats")
-BATCH_SIZE = 1000   # max account_ids per request
+BATCH_SIZE = 200    # max account_ids per request (1000 causes 520 due to URL length)
 
 # ---------------------------------------------------------------------------
 # Helpers

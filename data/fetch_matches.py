@@ -204,8 +204,7 @@ def phase1(limit: int) -> list[int]:
         _save_json(cp_path, cp)
 
         if len(batch) < BULK_LIMIT:
-            log.info("Reached end of available matches.")
-            break
+            log.debug(f"Short batch ({len(batch)} < {BULK_LIMIT}), continuing anyway.")
 
         time.sleep(0.26)  # ~4 req/s max for bulk endpoint
 
