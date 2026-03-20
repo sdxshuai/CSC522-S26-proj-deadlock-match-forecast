@@ -18,6 +18,7 @@ seaborn>=0.13.0
 # Utilities
 tqdm>=4.66.0
 pyarrow>=14.0.0
+huggingface_hub>=0.23.0
 
 # Notebooks
 jupyter>=1.0.0
