@@ -245,29 +245,29 @@ _SLIM_MATCH_FIELDS = {
     "match_id", "match_outcome", "winning_team", "start_time", "duration_s",
     "match_mode", "game_mode", "average_badge_team0", "average_badge_team1",
 }
-# Player fields to DROP in slim mode (keeps items, scalars, hero_data, ability info):
-#   stats          — 26 KB/player of per-minute time-series (dominant size driver)
-#   pings          — chat ping counts, not useful for prediction
-#   accolades      — post-game MVP badges, not useful for prediction
-#   death_details  — per-death breakdown, not useful for prediction
-#   power_up_buffs — map power-up pickup log, not useful for prediction
-_SLIM_PLAYER_EXCLUDE = {"stats", "pings", "accolades", "death_details", "power_up_buffs"}
+# Player fields to keep in slim mode — only pre-match information:
+#   account_id     — player identity (join key for Phase 3 player stats)
+#   hero_id        — hero draft pick
+#   team           — team assignment (0 or 1)
+#   assigned_lane  — lane assignment (set at draft time)
+#   player_slot    — slot index within the team
+# All in-game stats (kills, deaths, items, level, net_worth, etc.) are excluded
+# because they are unavailable at prediction time.
+_SLIM_PLAYER_FIELDS = {"account_id", "hero_id", "team", "assigned_lane", "player_slot"}
 
 
 def _slim_match(data: dict) -> dict:
-    """Extract fields needed for model training.
+    """Extract only pre-match fields needed for win prediction.
 
-    Match level: keep a fixed set of summary fields (~200 B).
-    Player level: keep everything EXCEPT large blobs (~4.3 KB vs ~34 KB/player).
-      Kept: items, scalars, hero_data, ability info, stats_type_stat
-      Dropped: stats (26 KB time-series), pings, accolades, death_details, power_up_buffs
-    Net result: ~52 KB/match instead of ~650 KB/match (50k matches ≈ 2.5 GB).
+    Match level: outcome label + context (~200 B).
+    Player level: hero draft + lane assignment only (~100 B/player).
+    Net result: ~1.5 KB/match instead of ~650 KB/match (50k matches ≈ 75 MB).
     """
     mi = data.get("match_info", data)
     out = {k: mi[k] for k in _SLIM_MATCH_FIELDS if k in mi}
     players = mi.get("players", [])
     out["players"] = [
-        {k: v for k, v in p.items() if k not in _SLIM_PLAYER_EXCLUDE}
+        {k: p[k] for k in _SLIM_PLAYER_FIELDS if k in p}
         for p in players
     ]
     return out
@@ -298,7 +298,7 @@ def phase2(match_ids: list[int], limit: int, rate: float, slim: bool = True) -> 
 
     rate: number of concurrent worker threads (each worker = 1 in-flight request).
     With ~0.45s RTT per request, N workers ≈ N/0.45 req/s throughput.
-    slim: if True, only save fields needed for training (~1.3 KB vs ~654 KB per match).
+    slim: if True, only save pre-match fields needed for win prediction (~1.5 KB vs ~650 KB per match).
     """
     MATCHES_DIR.mkdir(parents=True, exist_ok=True)
     fetched_ids = _load_fetched_ids()
