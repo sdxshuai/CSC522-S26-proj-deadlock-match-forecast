@@ -240,7 +240,40 @@ def _save_fetched_ids(fetched_ids: set[int]) -> None:
     _save_json(cp_path, {"fetched_ids": sorted(fetched_ids), "total": len(fetched_ids)})
 
 
-def _fetch_one(match_id: int) -> tuple[int, dict | None]:
+# Match-level fields to keep in slim mode
+_SLIM_MATCH_FIELDS = {
+    "match_id", "match_outcome", "winning_team", "start_time", "duration_s",
+    "match_mode", "game_mode", "average_badge_team0", "average_badge_team1",
+}
+# Player fields to DROP in slim mode (keeps items, scalars, hero_data, ability info):
+#   stats          — 26 KB/player of per-minute time-series (dominant size driver)
+#   pings          — chat ping counts, not useful for prediction
+#   accolades      — post-game MVP badges, not useful for prediction
+#   death_details  — per-death breakdown, not useful for prediction
+#   power_up_buffs — map power-up pickup log, not useful for prediction
+_SLIM_PLAYER_EXCLUDE = {"stats", "pings", "accolades", "death_details", "power_up_buffs"}
+
+
+def _slim_match(data: dict) -> dict:
+    """Extract fields needed for model training.
+
+    Match level: keep a fixed set of summary fields (~200 B).
+    Player level: keep everything EXCEPT large blobs (~4.3 KB vs ~34 KB/player).
+      Kept: items, scalars, hero_data, ability info, stats_type_stat
+      Dropped: stats (26 KB time-series), pings, accolades, death_details, power_up_buffs
+    Net result: ~52 KB/match instead of ~650 KB/match (50k matches ≈ 2.5 GB).
+    """
+    mi = data.get("match_info", data)
+    out = {k: mi[k] for k in _SLIM_MATCH_FIELDS if k in mi}
+    players = mi.get("players", [])
+    out["players"] = [
+        {k: v for k, v in p.items() if k not in _SLIM_PLAYER_EXCLUDE}
+        for p in players
+    ]
+    return out
+
+
+def _fetch_one(match_id: int, slim: bool = False) -> tuple[int, dict | None]:
     """Fetch a single match's metadata. Returns (match_id, data) or (match_id, None) on error."""
     url = f"{BASE_URL}/matches/{match_id}/metadata"
     try:
@@ -250,19 +283,22 @@ def _fetch_one(match_id: int) -> tuple[int, dict | None]:
         except Exception:
             log.warning(f"Non-JSON response for match {match_id} (skipping)")
             return match_id, None
+        if slim:
+            data = _slim_match(data)
         return match_id, data
     except Exception as exc:
         log.warning(f"Failed to fetch match {match_id}: {exc}")
         return match_id, None
 
 
-def phase2(match_ids: list[int], limit: int, rate: float) -> None:
+def phase2(match_ids: list[int], limit: int, rate: float, slim: bool = True) -> None:
     """
     Fetch /v1/matches/{id}/metadata for each match_id not yet downloaded.
     Saves to data/raw/matches/match_{id}.json.
 
     rate: number of concurrent worker threads (each worker = 1 in-flight request).
     With ~0.45s RTT per request, N workers ≈ N/0.45 req/s throughput.
+    slim: if True, only save fields needed for training (~1.3 KB vs ~654 KB per match).
     """
     MATCHES_DIR.mkdir(parents=True, exist_ok=True)
     fetched_ids = _load_fetched_ids()
@@ -278,7 +314,7 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
         f"(already have {len(fetched_ids)}, target {limit})"
     )
     log.info(f"          Workers: {workers} | Est. rate ≈ {estimated_rate:.0f} req/s "
-             f"| ETA ≈ {len(pending)/estimated_rate/60:.1f} min")
+             f"| ETA ≈ {len(pending)/estimated_rate/60:.1f} min | slim={slim}")
 
     done = 0
     errors = 0
@@ -288,7 +324,7 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
     window_done = 0
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_fetch_one, mid): mid for mid in pending}
+        futures = {executor.submit(_fetch_one, mid, slim): mid for mid in pending}
         for future in as_completed(futures):
             match_id, data = future.result()
             with lock:
@@ -358,6 +394,12 @@ def main() -> None:
         default=10.0,
         help="Phase-2 fetch rate in req/s (max ~100 from cache)",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        default=False,
+        help="Save full match JSON (~650 KB/match). Default: slim mode (~1.3 KB/match)",
+    )
     args = parser.parse_args()
 
     if args.phase in ("1", "all"):
@@ -367,7 +409,7 @@ def main() -> None:
         log.info(f"[Phase 2] Loaded {len(match_ids)} match IDs from existing batch files")
 
     if args.phase in ("2", "all"):
-        phase2(match_ids, limit=args.limit, rate=args.rate)
+        phase2(match_ids, limit=args.limit, rate=args.rate, slim=not args.full)
 
 
 if __name__ == "__main__":
