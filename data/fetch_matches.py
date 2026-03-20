@@ -45,7 +45,9 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -238,12 +240,29 @@ def _save_fetched_ids(fetched_ids: set[int]) -> None:
     _save_json(cp_path, {"fetched_ids": sorted(fetched_ids), "total": len(fetched_ids)})
 
 
+def _fetch_one(match_id: int) -> tuple[int, dict | None]:
+    """Fetch a single match's metadata. Returns (match_id, data) or (match_id, None) on error."""
+    url = f"{BASE_URL}/matches/{match_id}/metadata"
+    try:
+        resp = _get(url)
+        try:
+            data = resp.json()
+        except Exception:
+            log.warning(f"Non-JSON response for match {match_id} (skipping)")
+            return match_id, None
+        return match_id, data
+    except Exception as exc:
+        log.warning(f"Failed to fetch match {match_id}: {exc}")
+        return match_id, None
+
+
 def phase2(match_ids: list[int], limit: int, rate: float) -> None:
     """
     Fetch /v1/matches/{id}/metadata for each match_id not yet downloaded.
     Saves to data/raw/matches/match_{id}.json.
 
-    rate: target requests per second (default 10 for safety; cache allows 100/s)
+    rate: number of concurrent worker threads (each worker = 1 in-flight request).
+    With ~0.45s RTT per request, N workers ≈ N/0.45 req/s throughput.
     """
     MATCHES_DIR.mkdir(parents=True, exist_ok=True)
     fetched_ids = _load_fetched_ids()
@@ -251,64 +270,55 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
     pending = [mid for mid in match_ids if mid not in fetched_ids]
     pending = pending[:limit]
 
+    workers = max(1, int(rate))
+    estimated_rtt = 0.45  # seconds per request
+    estimated_rate = workers / estimated_rtt
     log.info(
         f"[Phase 2] Need to fetch {len(pending)} individual match files "
         f"(already have {len(fetched_ids)}, target {limit})"
     )
-    log.info(f"          Rate: {rate} req/s | ETA ≈ {len(pending)/rate/60:.1f} min")
+    log.info(f"          Workers: {workers} | Est. rate ≈ {estimated_rate:.0f} req/s "
+             f"| ETA ≈ {len(pending)/estimated_rate/60:.1f} min")
 
-    sleep_s = 1.0 / rate
     done = 0
     errors = 0
+    lock = threading.Lock()
     phase2_start = time.time()
     window_start = phase2_start
-    window_done = 0  # requests in current reporting window
+    window_done = 0
 
-    for match_id in pending:
-        url = f"{BASE_URL}/matches/{match_id}/metadata"
-        try:
-            resp = _get(url)
-        except Exception as exc:
-            log.warning(f"Failed to fetch match {match_id}: {exc}")
-            errors += 1
-            continue
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_fetch_one, mid): mid for mid in pending}
+        for future in as_completed(futures):
+            match_id, data = future.result()
+            with lock:
+                if data is not None:
+                    out_path = MATCHES_DIR / f"match_{match_id}.json"
+                    out_path.write_text(json.dumps(data))
+                    fetched_ids.add(match_id)
+                    done += 1
+                    window_done += 1
+                else:
+                    errors += 1
 
-        content_type = resp.headers.get("Content-Type", "")
-        if "json" in content_type:
-            data = resp.json()
-        else:
-            try:
-                data = resp.json()
-            except Exception:
-                log.warning(f"Non-JSON response for match {match_id} (skipping)")
-                continue
-
-        out_path = MATCHES_DIR / f"match_{match_id}.json"
-        out_path.write_text(json.dumps(data))
-        fetched_ids.add(match_id)
-        done += 1
-        window_done += 1
-
-        if done % 100 == 0:
-            _save_fetched_ids(fetched_ids)
-            now = time.time()
-            elapsed_total = now - phase2_start
-            window_elapsed = now - window_start
-            actual_rate = window_done / window_elapsed if window_elapsed > 0 else 0
-            remaining = len(pending) - done
-            eta_s = remaining / actual_rate if actual_rate > 0 else float('inf')
-            pct = 100 * done / len(pending)
-            log.info(
-                f"Progress: {done}/{len(pending)} ({pct:.1f}%) "
-                f"| rate={actual_rate:.1f} req/s "
-                f"| elapsed={elapsed_total:.0f}s "
-                f"| ETA≈{eta_s/60:.1f}min "
-                f"| errors={errors}"
-            )
-            window_start = now
-            window_done = 0
-
-        time.sleep(sleep_s)
+                if (done + errors) % 100 == 0:
+                    _save_fetched_ids(fetched_ids)
+                    now = time.time()
+                    elapsed_total = now - phase2_start
+                    window_elapsed = now - window_start
+                    actual_rate = window_done / window_elapsed if window_elapsed > 0 else 0
+                    remaining = len(pending) - done - errors
+                    eta_s = remaining / actual_rate if actual_rate > 0 else float('inf')
+                    pct = 100 * (done + errors) / len(pending)
+                    log.info(
+                        f"Progress: {done}/{len(pending)} ({pct:.1f}%) "
+                        f"| rate={actual_rate:.1f} req/s "
+                        f"| elapsed={elapsed_total:.0f}s "
+                        f"| ETA≈{eta_s/60:.1f}min "
+                        f"| errors={errors}"
+                    )
+                    window_start = now
+                    window_done = 0
 
     _save_fetched_ids(fetched_ids)
     elapsed_p2 = time.time() - phase2_start
