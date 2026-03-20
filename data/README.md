@@ -91,11 +91,37 @@ Filter applied during collection:
 
 ### Individual match metadata (`raw/matches/match_{id}.json`)
 
-The API returns the `CMsgMatchMetaDataContents` protobuf parsed as JSON.
-The exact schema is inferred at runtime and handled flexibly in preprocessing.
-Key fields expected at top level or under `match_info`:
-- `match_id`, `winning_team` or `match_winner`
-- `players` array — each player has: `account_id`, `hero_id`, `team`/`player_team`
+Saved in **slim mode** by default (use `--full` to save raw API response).
+Only pre-match fields are retained — all in-game stats are excluded because
+they are unavailable at prediction time.
+
+```json
+{
+  "match_id": 12670,
+  "match_outcome": "TeamWin",
+  "winning_team": 1,
+  "start_time": "2024-05-20 00:04:05",
+  "duration_s": 2328,
+  "match_mode": "Unranked",
+  "game_mode": "normal",
+  "average_badge_team0": 90,
+  "average_badge_team1": 88,
+  "players": [
+    {
+      "account_id": 123456789,
+      "hero_id": 15,
+      "team": 0,
+      "assigned_lane": 1,
+      "player_slot": 2
+    }
+    // ... 11 more players
+  ]
+}
+```
+
+Excluded (in-game only, unavailable pre-match): `kills`, `deaths`, `assists`,
+`net_worth`, `level`, `items`, `stats` (time-series), `death_details`,
+`accolades`, `power_up_buffs`, `pings`, etc.
 
 ### Player hero stats (`raw/player_stats/hero_stats_NNNN.json`)
 
@@ -161,8 +187,9 @@ Target: `label` = 1 if Team0 wins, 0 if Team1 wins.
 
 | Item | Count | Storage |
 |---|---|---|
-| Match list (10k matches) | 10 batches | ~5 MB |
-| Individual match JSON | 10,000 files | ~500 MB–2 GB |
+| Match list (10k matches) | 10 batches | ~3 MB |
+| Individual match JSON (slim) | 10,000 files | ~15 MB |
+| Individual match JSON (slim) | 50,000 files | ~75 MB |
 | Player hero stats | ~50k account_ids | ~200 MB |
 | Player MMR | ~50k account_ids | ~100 MB |
 | Hero stats | ~60 heroes | < 1 MB |
