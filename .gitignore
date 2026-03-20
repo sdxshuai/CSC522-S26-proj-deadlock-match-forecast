@@ -1,0 +1,32 @@
+# Data (raw API responses and processed datasets are not committed)
+data/raw/
+data/processed/
+
+# Results (generated outputs)
+results/plots/
+results/metrics/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
