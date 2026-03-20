@@ -20,8 +20,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import sys
 from collections import Counter
 from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+_DATA_DIR = Path(__file__).resolve().parent
+if str(_DATA_DIR) not in sys.path:
+    sys.path.insert(0, str(_DATA_DIR))
+from log_utils import get_logger  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 MATCH_LIST_DIR = Path("data/raw/match_list")
 MATCHES_DIR = Path("data/raw/matches")
@@ -121,7 +133,7 @@ def summarise_matches(listed_ids: set[int], verbose: bool) -> dict:
             if len(players) == 12:
                 full_12_players += 1
             elif verbose:
-                print(f"  WARN: match {mid} has {len(players)} players (expected 12)")
+                log.warning(f"match {mid} has {len(players)} players (expected 12)")
             for p in players:
                 aid = p.get("account_id")
                 if aid:
@@ -200,37 +212,39 @@ def summarise_hero_stats() -> dict:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global log
+    log = get_logger("validate")
     parser = argparse.ArgumentParser(description="Validate collected raw data")
     parser.add_argument("--verbose", action="store_true", help="Print per-match warnings")
     args = parser.parse_args()
 
     W = 60  # report width
 
-    print("=" * W)
-    print(" DEADLOCK DATA VALIDATION REPORT")
-    print("=" * W)
+    log.info("=" * W)
+    log.info(" DEADLOCK DATA VALIDATION REPORT")
+    log.info("=" * W)
 
     # --- Hero stats ---
     hs = summarise_hero_stats()
-    print("\n[Hero Stats]")
-    print(f"  Hero win-rate records:   {hs['heroes']}")
-    print(f"  Counter matchup pairs:   {hs['counter_matchups']}")
-    print(f"  Synergy pairs:           {hs['synergies']}")
+    log.info("\n[Hero Stats]")
+    log.info(f"  Hero win-rate records:   {hs['heroes']}")
+    log.info(f"  Counter matchup pairs:   {hs['counter_matchups']}")
+    log.info(f"  Synergy pairs:           {hs['synergies']}")
 
     # --- Match list ---
     listed_ids, mode_counts = summarise_match_list()
-    print(f"\n[Match List]  ({MATCH_LIST_DIR})")
-    print(f"  Total listed matches:    {len(listed_ids)}")
+    log.info(f"\n[Match List]  ({MATCH_LIST_DIR})")
+    log.info(f"  Total listed matches:    {len(listed_ids)}")
     if mode_counts:
         for mode, cnt in sorted(mode_counts.items(), key=lambda x: -x[1]):
-            print(f"    {mode:<20} {cnt:>6}")
+            log.info(f"    {mode:<20} {cnt:>6}")
     else:
-        print("  No batch files found. Run: uv run python data/fetch_matches.py --phase 1")
+        log.info("  No batch files found. Run: uv run python data/fetch_matches.py --phase 1")
 
     # --- Match detail ---
-    print(f"\n[Match Files] ({MATCHES_DIR})")
+    log.info(f"\n[Match Files] ({MATCHES_DIR})")
     if not any(MATCHES_DIR.glob("match_*.json")):
-        print("  No match files found. Run: uv run python data/fetch_matches.py --phase 2")
+        log.info("  No match files found. Run: uv run python data/fetch_matches.py --phase 2")
         match_result = {
             "fetched_ids": set(),
             "account_ids": set(),
@@ -252,27 +266,27 @@ def main() -> None:
         )
         pct_listed = 100 * len(fetched) / len(listed_ids) if listed_ids else 0
 
-        print(f"  Fetched match files:     {len(fetched)}/{len(listed_ids)} ({pct_listed:.1f}% of listed)")
-        print(f"  Files with player data:  {match_result['with_players']} ({pct_players:.1f}%)")
-        print(f"  Files with 12 players:   {match_result['full_12_players']} ({pct_full:.1f}%)")
-        print(f"  Unique account_ids:      {len(account_ids)}")
+        log.info(f"  Fetched match files:     {len(fetched)}/{len(listed_ids)} ({pct_listed:.1f}% of listed)")
+        log.info(f"  Files with player data:  {match_result['with_players']} ({pct_players:.1f}%)")
+        log.info(f"  Files with 12 players:   {match_result['full_12_players']} ({pct_full:.1f}%)")
+        log.info(f"  Unique account_ids:      {len(account_ids)}")
 
         if match_result["missing_players"] and args.verbose:
-            print(f"  Matches missing players: {len(match_result['missing_players'])}")
+            log.warning(f"  Matches missing players: {len(match_result['missing_players'])}")
             if len(match_result["missing_players"]) <= 10:
-                print(f"    IDs: {match_result['missing_players']}")
+                log.warning(f"    IDs: {match_result['missing_players']}")
 
-        print("\n  Badge distribution (team0):")
+        log.info("\n  Badge distribution (team0):")
         for badge, cnt in sorted(
             match_result["badge_counts"].items(), key=lambda x: -x[1]
         )[:8]:
             bar = "█" * min(30, cnt // max(1, len(fetched) // 30))
-            print(f"    {badge:<14} {cnt:>5}  {bar}")
+            log.info(f"    {badge:<14} {cnt:>5}  {bar}")
 
     # --- Player stats ---
-    print(f"\n[Player Stats] ({PLAYER_STATS_DIR})")
+    log.info(f"\n[Player Stats] ({PLAYER_STATS_DIR})")
     if not PLAYER_STATS_DIR.exists():
-        print("  No player stats found. Run: uv run python data/fetch_player_stats.py")
+        log.info("  No player stats found. Run: uv run python data/fetch_player_stats.py")
     else:
         ps = summarise_player_stats(match_result.get("account_ids", set()))
         match_accounts = match_result.get("account_ids", set())
@@ -286,27 +300,27 @@ def main() -> None:
             if match_accounts
             else 0
         )
-        print(f"  Hero-stats coverage:     {len(ps['hero_stats_ids'])} accounts ({hero_cov:.1f}% of match players)")
-        print(f"  MMR coverage:            {len(ps['mmr_ids'])} accounts ({mmr_cov:.1f}% of match players)")
+        log.info(f"  Hero-stats coverage:     {len(ps['hero_stats_ids'])} accounts ({hero_cov:.1f}% of match players)")
+        log.info(f"  MMR coverage:            {len(ps['mmr_ids'])} accounts ({mmr_cov:.1f}% of match players)")
 
     # --- Readiness summary ---
-    print("\n" + "=" * W)
-    print(" READINESS")
-    print("=" * W)
+    log.info("\n" + "=" * W)
+    log.info(" READINESS")
+    log.info("=" * W)
     n_full = match_result.get("full_12_players", 0)
     n_hero = len(ps["hero_stats_ids"]) if (PLAYER_STATS_DIR.exists() and "ps" in dir()) else 0
     n_mmr = len(ps["mmr_ids"]) if (PLAYER_STATS_DIR.exists() and "ps" in dir()) else 0
     hero_done = hs["heroes"] > 0
-    print(f"  Hero stats ready:        {'YES' if hero_done else 'NO — run fetch_hero_stats.py'}")
-    print(f"  Usable match records:    {n_full}")
-    print(f"  Player hero stats:       {n_hero} accounts")
-    print(f"  Player MMR:              {n_mmr} accounts")
+    log.info(f"  Hero stats ready:        {'YES' if hero_done else 'NO — run fetch_hero_stats.py'}")
+    log.info(f"  Usable match records:    {n_full}")
+    log.info(f"  Player hero stats:       {n_hero} accounts")
+    log.info(f"  Player MMR:              {n_mmr} accounts")
     if n_full >= 1000:
-        print("\n  Ready for preprocessing. Run: uv run python src/preprocess.py")
+        log.info("\n  Ready for preprocessing. Run: uv run python src/preprocess.py")
     else:
-        print(f"\n  Need more data. Target: 10 000 matches with full player data.")
-        print(f"  Run: uv run python data/fetch_matches.py --limit 10000")
-    print("=" * W)
+        log.info(f"\n  Need more data. Target: 10 000 matches with full player data.")
+        log.info(f"  Run: uv run python data/fetch_matches.py --limit 10000")
+    log.info("=" * W)
 
 
 if __name__ == "__main__":

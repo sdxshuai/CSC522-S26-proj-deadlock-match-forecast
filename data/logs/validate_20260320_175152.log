@@ -1,0 +1,45 @@
+2026-03-20 17:51:52 [INFO ] Log file: /mnt/ncsudrive/x/xzhou38/CSC522-S26-proj-deadlock-match-forecast/data/logs/validate_20260320_175152.log
+2026-03-20 17:51:52 [INFO ] ============================================================
+2026-03-20 17:51:52 [INFO ]  DEADLOCK DATA VALIDATION REPORT
+2026-03-20 17:51:52 [INFO ] ============================================================
+2026-03-20 17:51:52 [INFO ] 
+[Hero Stats]
+2026-03-20 17:51:52 [INFO ]   Hero win-rate records:   38
+2026-03-20 17:51:52 [INFO ]   Counter matchup pairs:   1406
+2026-03-20 17:51:52 [INFO ]   Synergy pairs:           703
+2026-03-20 17:51:52 [INFO ] 
+[Match List]  (data/raw/match_list)
+2026-03-20 17:51:52 [INFO ]   Total listed matches:    956
+2026-03-20 17:51:52 [INFO ]     Unranked                956
+2026-03-20 17:51:52 [INFO ] 
+[Match Files] (data/raw/matches)
+2026-03-20 17:51:53 [INFO ]   Fetched match files:     50/956 (5.2% of listed)
+2026-03-20 17:51:53 [INFO ]   Files with player data:  50 (100.0%)
+2026-03-20 17:51:53 [INFO ]   Files with 12 players:   50 (100.0%)
+2026-03-20 17:51:53 [INFO ]   Unique account_ids:      600
+2026-03-20 17:51:53 [INFO ] 
+  Badge distribution (team0):
+2026-03-20 17:51:53 [INFO ]     Archon             8  ████████
+2026-03-20 17:51:53 [INFO ]     Phantom            8  ████████
+2026-03-20 17:51:53 [INFO ]     Alchemist          6  ██████
+2026-03-20 17:51:53 [INFO ]     Oracle             6  ██████
+2026-03-20 17:51:53 [INFO ]     Eternus            6  ██████
+2026-03-20 17:51:53 [INFO ]     Ritualist          5  █████
+2026-03-20 17:51:53 [INFO ]     Ascendant          4  ████
+2026-03-20 17:51:53 [INFO ]     Seeker             3  ███
+2026-03-20 17:51:53 [INFO ] 
+[Player Stats] (data/raw/player_stats)
+2026-03-20 17:51:53 [INFO ]   Hero-stats coverage:     600 accounts (100.0% of match players)
+2026-03-20 17:51:53 [INFO ]   MMR coverage:            600 accounts (100.0% of match players)
+2026-03-20 17:51:53 [INFO ] 
+============================================================
+2026-03-20 17:51:53 [INFO ]  READINESS
+2026-03-20 17:51:53 [INFO ] ============================================================
+2026-03-20 17:51:53 [INFO ]   Hero stats ready:        YES
+2026-03-20 17:51:53 [INFO ]   Usable match records:    50
+2026-03-20 17:51:53 [INFO ]   Player hero stats:       600 accounts
+2026-03-20 17:51:53 [INFO ]   Player MMR:              600 accounts
+2026-03-20 17:51:53 [INFO ] 
+  Need more data. Target: 10 000 matches with full player data.
+2026-03-20 17:51:53 [INFO ]   Run: uv run python data/fetch_matches.py --limit 10000
+2026-03-20 17:51:53 [INFO ] ============================================================

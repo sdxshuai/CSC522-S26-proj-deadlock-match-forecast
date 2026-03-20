@@ -1,0 +1,5 @@
+2026-03-20 17:41:23 [INFO ] Log file: /mnt/ncsudrive/x/xzhou38/CSC522-S26-proj-deadlock-match-forecast/data/logs/fetch_matches_20260320_174123.log
+2026-03-20 17:41:23 [INFO ] [Phase 2] Loaded 907 match IDs from existing batch files
+2026-03-20 17:41:23 [INFO ] [Phase 2] Need to fetch 20 individual match files (already have 150, target 20)
+2026-03-20 17:41:23 [INFO ]           Rate: 10.0 req/s | ETA ≈ 0.0 min
+2026-03-20 17:41:37 [INFO ] [Phase 2] Done. Fetched 20 new matches (total: 170) | errors=0 | wall-time=14s | avg-rate=1.5 req/s

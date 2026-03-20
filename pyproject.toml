@@ -1,0 +1,40 @@
+[project]
+name = "deadlock-match-forecast"
+version = "0.1.0"
+description = "Predicts Deadlock match outcomes using pre-match player and hero features"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # HTTP
+    "requests>=2.31.0",
+    # Data
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "pyarrow>=14.0.0",
+    # ML
+    "scikit-learn>=1.4.0",
+    "xgboost>=2.0.0",
+    "lightgbm>=4.0.0",
+    # Deep Learning
+    "torch>=2.2.0",
+    # Visualization
+    "matplotlib>=3.7.0",
+    "seaborn>=0.13.0",
+    # Utilities
+    "tqdm>=4.66.0",
+    # Notebooks
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+]
+
+[tool.uv]
+# Uncomment and set cu124 (or cu128) if you have a CUDA GPU:
+# extra-index-url = ["https://download.pytorch.org/whl/cu124"]
+# index-strategy = "unsafe-best-match"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

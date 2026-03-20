@@ -31,10 +31,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import sys
 import time
 from pathlib import Path
 
 import requests
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+_DATA_DIR = Path(__file__).resolve().parent
+if str(_DATA_DIR) not in sys.path:
+    sys.path.insert(0, str(_DATA_DIR))
+from log_utils import get_logger  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.deadlock-api.com/v1"
 MATCHES_DIR = Path("data/raw/matches")
@@ -63,7 +75,7 @@ def _get(url: str, params: dict | None = None, retries: int = 5) -> requests.Res
             resp = requests.get(url, params=params, timeout=30)
             if resp.status_code == 429:
                 wait = delay * (2 ** attempt)
-                print(f"  Rate limited (429). Waiting {wait:.1f}s …", flush=True)
+                log.warning(f"Rate limited (429). Waiting {wait:.1f}s …")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
@@ -72,7 +84,7 @@ def _get(url: str, params: dict | None = None, retries: int = 5) -> requests.Res
             if attempt == retries - 1:
                 raise
             wait = delay * (2 ** attempt)
-            print(f"  Request error ({exc}). Retrying in {wait:.1f}s …", flush=True)
+            log.warning(f"Request error ({exc}). Retrying in {wait:.1f}s …")
             time.sleep(wait)
     raise RuntimeError(f"All retries failed for {url}")
 
@@ -93,7 +105,7 @@ def extract_account_ids(matches_dir: Path) -> set[int]:
     files = sorted(matches_dir.glob("match_*.json"))
 
     if not files:
-        print(f"  No match files found in {matches_dir}")
+        log.warning(f"No match files found in {matches_dir}")
         return account_ids
 
     for fpath in files:
@@ -136,8 +148,8 @@ def fetch_hero_stats(
     pending = [aid for aid in account_ids if aid not in already_done]
     batches = [pending[i : i + BATCH_SIZE] for i in range(0, len(pending), BATCH_SIZE)]
 
-    print(
-        f"\n[Hero Stats] {len(pending)} accounts to fetch in "
+    log.info(
+        f"[Hero Stats] {len(pending)} accounts to fetch in "
         f"{len(batches)} batches …"
     )
 
@@ -145,28 +157,37 @@ def fetch_hero_stats(
     existing = sorted(out_dir.glob("hero_stats_*.json"))
     batch_idx = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 0
 
-    for batch in batches:
+    hs_start = time.time()
+    total_records = 0
+    errors = 0
+
+    for i, batch in enumerate(batches, 1):
         params = {"account_ids": ",".join(str(a) for a in batch)}
         try:
             resp = _get(f"{BASE_URL}/players/hero-stats", params=params)
             records = resp.json()
         except Exception as exc:
-            print(f"  WARN: batch failed ({exc}), skipping {len(batch)} accounts")
+            log.warning(f"Hero-stats batch failed ({exc}), skipping {len(batch)} accounts")
+            errors += 1
             batch_idx += 1
             time.sleep(0.5)
             continue
 
         out_path = out_dir / f"hero_stats_{batch_idx:04d}.json"
         _save_json(out_path, records)
-        print(
-            f"  Batch {batch_idx:04d}: {len(batch)} accounts → "
-            f"{len(records)} records saved",
-            flush=True,
+        total_records += len(records)
+        elapsed = time.time() - hs_start
+        pct = 100 * i / len(batches)
+        log.info(
+            f"  Batch {batch_idx:04d} ({i}/{len(batches)}, {pct:.0f}%): "
+            f"{len(batch)} accounts → {len(records)} records "
+            f"| elapsed={elapsed:.1f}s"
         )
         batch_idx += 1
         time.sleep(0.05)  # ~20 req/s (well under 100/s limit)
 
-    print(f"[Hero Stats] Done.")
+    elapsed_hs = time.time() - hs_start
+    log.info(f"[Hero Stats] Done. {total_records} records in {elapsed_hs:.1f}s | errors={errors}")
 
 
 # ---------------------------------------------------------------------------
@@ -181,36 +202,45 @@ def fetch_mmr(
     pending = [aid for aid in account_ids if aid not in already_done]
     batches = [pending[i : i + BATCH_SIZE] for i in range(0, len(pending), BATCH_SIZE)]
 
-    print(
-        f"\n[MMR] {len(pending)} accounts to fetch in "
+    log.info(
+        f"[MMR] {len(pending)} accounts to fetch in "
         f"{len(batches)} batches …"
     )
 
     existing = sorted(out_dir.glob("mmr_*.json"))
     batch_idx = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 0
 
-    for batch in batches:
+    mmr_start = time.time()
+    total_records = 0
+    errors = 0
+
+    for i, batch in enumerate(batches, 1):
         params = {"account_ids": ",".join(str(a) for a in batch)}
         try:
             resp = _get(f"{BASE_URL}/players/mmr", params=params)
             records = resp.json()
         except Exception as exc:
-            print(f"  WARN: MMR batch failed ({exc}), skipping {len(batch)} accounts")
+            log.warning(f"MMR batch failed ({exc}), skipping {len(batch)} accounts")
+            errors += 1
             batch_idx += 1
             time.sleep(0.5)
             continue
 
         out_path = out_dir / f"mmr_{batch_idx:04d}.json"
         _save_json(out_path, records)
-        print(
-            f"  Batch {batch_idx:04d}: {len(batch)} accounts → "
-            f"{len(records)} MMR records saved",
-            flush=True,
+        total_records += len(records)
+        elapsed = time.time() - mmr_start
+        pct = 100 * i / len(batches)
+        log.info(
+            f"  Batch {batch_idx:04d} ({i}/{len(batches)}, {pct:.0f}%): "
+            f"{len(batch)} accounts → {len(records)} MMR records "
+            f"| elapsed={elapsed:.1f}s"
         )
         batch_idx += 1
         time.sleep(0.05)
 
-    print(f"[MMR] Done.")
+    elapsed_mmr = time.time() - mmr_start
+    log.info(f"[MMR] Done. {total_records} records in {elapsed_mmr:.1f}s | errors={errors}")
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +281,8 @@ def _load_mmr_processed_ids(out_dir: Path) -> set[int]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global log
+    log = get_logger("fetch_player_stats")
     parser = argparse.ArgumentParser(
         description="Fetch per-player hero stats and MMR history",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -286,27 +318,27 @@ def main() -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Scanning {matches_dir} for account_ids …")
+    log.info(f"Scanning {matches_dir} for account_ids …")
     all_ids = sorted(extract_account_ids(matches_dir))
-    print(f"  Found {len(all_ids)} unique account_ids")
+    log.info(f"  Found {len(all_ids)} unique account_ids")
 
     if not all_ids:
-        print("No account_ids found. Run fetch_matches.py (phase 2) first.")
+        log.warning("No account_ids found. Run fetch_matches.py (phase 2) first.")
         return
 
     if not args.mmr_only:
         already_hero = _load_processed_ids(out_dir) if args.incremental else set()
         if args.incremental and already_hero:
-            print(f"  Skipping {len(already_hero)} already-processed accounts (hero stats)")
+            log.info(f"  Skipping {len(already_hero)} already-processed accounts (hero stats)")
         fetch_hero_stats(all_ids, out_dir, already_hero)
 
     if not args.hero_stats_only:
         already_mmr = _load_mmr_processed_ids(out_dir) if args.incremental else set()
         if args.incremental and already_mmr:
-            print(f"  Skipping {len(already_mmr)} already-processed accounts (MMR)")
+            log.info(f"  Skipping {len(already_mmr)} already-processed accounts (MMR)")
         fetch_mmr(all_ids, out_dir, already_mmr)
 
-    print("\nAll player stats fetched.")
+    log.info("All player stats fetched.")
 
 
 if __name__ == "__main__":

@@ -42,12 +42,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
 
 import requests
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+_DATA_DIR = Path(__file__).resolve().parent
+if str(_DATA_DIR) not in sys.path:
+    sys.path.insert(0, str(_DATA_DIR))
+from log_utils import get_logger  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.deadlock-api.com/v1"
 MATCH_LIST_DIR = Path("data/raw/match_list")
@@ -84,7 +95,7 @@ def _get(url: str, params: dict | None = None, retries: int = 5) -> requests.Res
             resp = requests.get(url, params=params, timeout=30)
             if resp.status_code == 429:
                 wait = delay * (2 ** attempt)
-                print(f"  Rate limited (429). Waiting {wait:.1f}s …", flush=True)
+                log.warning(f"Rate limited (429). Waiting {wait:.1f}s …")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
@@ -93,7 +104,7 @@ def _get(url: str, params: dict | None = None, retries: int = 5) -> requests.Res
             if attempt == retries - 1:
                 raise
             wait = delay * (2 ** attempt)
-            print(f"  Request error ({exc}). Retrying in {wait:.1f}s …", flush=True)
+            log.warning(f"Request error ({exc}). Retrying in {wait:.1f}s …")
             time.sleep(wait)
     raise RuntimeError(f"All {retries} retries failed for {url}")
 
@@ -113,32 +124,37 @@ def _filter_match(m: dict) -> bool:
 
 def phase1(limit: int) -> list[int]:
     """
-    Paginate /v1/matches/metadata and collect up to `limit` match IDs that
-    pass the filter.  Returns all collected match_ids (including previously
-    saved ones).
+    Paginate /v1/matches/metadata from newest to oldest and collect up to
+    `limit` match IDs that pass the filter.  Returns all collected match_ids
+    (including previously saved ones).
+
+    Uses order_direction=desc with a max_match_id cursor so each run begins
+    at the most recent available match and pages backwards in time.
     """
     MATCH_LIST_DIR.mkdir(parents=True, exist_ok=True)
     cp_path = MATCH_LIST_DIR / "checkpoint.json"
     cp = _load_json(cp_path)
 
-    # Determine the lowest match_id to start from for new pages
-    # We walk forward in time: start above the highest already-listed match_id
-    min_match_id = cp.get("min_match_id_next", 0)
+    # Cursor: fetch matches below this ID on each page.
+    # None on the first call → API returns the absolute latest matches.
+    max_match_id = cp.get("max_match_id_next")  # None means "start from latest"
     total_listed = cp.get("total_listed", 0)
     batch_idx = cp.get("batch_idx", 0)
 
-    print(f"[Phase 1] Starting match list collection (already have {total_listed} matches)")
-    print(f"          Resuming from min_match_id={min_match_id}")
+    log.info(f"[Phase 1] Starting match list collection (already have {total_listed} matches)")
+    log.info(f"          Resuming from max_match_id={'latest' if max_match_id is None else max_match_id}")
+
+    phase1_start = time.time()
 
     while total_listed < limit:
         params: dict = {
             "limit": BULK_LIMIT,
             "game_mode": "normal",
             "order_by": "match_id",
-            "order_direction": "asc",
+            "order_direction": "desc",
         }
-        if min_match_id > 0:
-            params["min_match_id"] = min_match_id
+        if max_match_id is not None:
+            params["max_match_id"] = max_match_id
 
         resp = _get(f"{BASE_URL}/matches/metadata", params=params)
 
@@ -151,14 +167,14 @@ def phase1(limit: int) -> list[int]:
             try:
                 batch = resp.json()
             except Exception:
-                print(
-                    f"  ERROR: Unexpected content-type '{content_type}'. "
+                log.error(
+                    f"Unexpected content-type '{content_type}'. "
                     "Cannot decode response. Stopping Phase 1."
                 )
                 break
 
         if not batch:
-            print("  No more matches returned. Phase 1 complete.")
+            log.info("No more matches returned. Phase 1 complete.")
             break
 
         # Filter matches
@@ -169,31 +185,32 @@ def phase1(limit: int) -> list[int]:
             _save_json(out_path, kept)
             total_listed += len(kept)
             batch_idx += 1
-            print(
-                f"  Batch {batch_idx-1:04d}: fetched {len(batch)}, kept {len(kept)}"
-                f" | total={total_listed}",
-                flush=True,
+            elapsed = time.time() - phase1_start
+            log.info(
+                f"Batch {batch_idx-1:04d}: fetched {len(batch)}, kept {len(kept)}"
+                f" | total={total_listed} | elapsed={elapsed:.1f}s"
             )
 
-        # Advance cursor to just above the highest match_id in this page
-        max_id_in_batch = max(m["match_id"] for m in batch)
-        min_match_id = max_id_in_batch + 1
+        # Advance cursor: next page starts below the lowest match_id in this page
+        min_id_in_batch = min(m["match_id"] for m in batch)
+        max_match_id = min_id_in_batch - 1
 
         # Update checkpoint
         cp = {
-            "min_match_id_next": min_match_id,
+            "max_match_id_next": max_match_id,
             "total_listed": total_listed,
             "batch_idx": batch_idx,
         }
         _save_json(cp_path, cp)
 
         if len(batch) < BULK_LIMIT:
-            print("  Reached end of available matches.")
+            log.info("Reached end of available matches.")
             break
 
         time.sleep(0.26)  # ~4 req/s max for bulk endpoint
 
-    print(f"[Phase 1] Done. Total listed: {total_listed}")
+    elapsed_p1 = time.time() - phase1_start
+    log.info(f"[Phase 1] Done. Total listed: {total_listed} | wall-time: {elapsed_p1:.1f}s")
 
     # Return all collected match IDs
     return _load_all_match_ids()
@@ -235,21 +252,26 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
     pending = [mid for mid in match_ids if mid not in fetched_ids]
     pending = pending[:limit]
 
-    print(
+    log.info(
         f"[Phase 2] Need to fetch {len(pending)} individual match files "
         f"(already have {len(fetched_ids)}, target {limit})"
     )
-    print(f"          Rate: {rate} req/s | ETA ≈ {len(pending)/rate/60:.1f} min")
+    log.info(f"          Rate: {rate} req/s | ETA ≈ {len(pending)/rate/60:.1f} min")
 
     sleep_s = 1.0 / rate
     done = 0
+    errors = 0
+    phase2_start = time.time()
+    window_start = phase2_start
+    window_done = 0  # requests in current reporting window
 
     for match_id in pending:
         url = f"{BASE_URL}/matches/{match_id}/metadata"
         try:
             resp = _get(url)
         except Exception as exc:
-            print(f"  WARN: Failed to fetch match {match_id}: {exc}")
+            log.warning(f"Failed to fetch match {match_id}: {exc}")
+            errors += 1
             continue
 
         content_type = resp.headers.get("Content-Type", "")
@@ -259,22 +281,43 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
             try:
                 data = resp.json()
             except Exception:
-                print(f"  WARN: Non-JSON response for match {match_id} (skipping)")
+                log.warning(f"Non-JSON response for match {match_id} (skipping)")
                 continue
 
         out_path = MATCHES_DIR / f"match_{match_id}.json"
         out_path.write_text(json.dumps(data))
         fetched_ids.add(match_id)
         done += 1
+        window_done += 1
 
         if done % 100 == 0:
             _save_fetched_ids(fetched_ids)
-            print(f"  Progress: {done}/{len(pending)} fetched", flush=True)
+            now = time.time()
+            elapsed_total = now - phase2_start
+            window_elapsed = now - window_start
+            actual_rate = window_done / window_elapsed if window_elapsed > 0 else 0
+            remaining = len(pending) - done
+            eta_s = remaining / actual_rate if actual_rate > 0 else float('inf')
+            pct = 100 * done / len(pending)
+            log.info(
+                f"Progress: {done}/{len(pending)} ({pct:.1f}%) "
+                f"| rate={actual_rate:.1f} req/s "
+                f"| elapsed={elapsed_total:.0f}s "
+                f"| ETA≈{eta_s/60:.1f}min "
+                f"| errors={errors}"
+            )
+            window_start = now
+            window_done = 0
 
         time.sleep(sleep_s)
 
     _save_fetched_ids(fetched_ids)
-    print(f"[Phase 2] Done. Fetched {done} new matches (total: {len(fetched_ids)})")
+    elapsed_p2 = time.time() - phase2_start
+    log.info(
+        f"[Phase 2] Done. Fetched {done} new matches (total: {len(fetched_ids)}) "
+        f"| errors={errors} | wall-time={elapsed_p2:.0f}s "
+        f"| avg-rate={(done / elapsed_p2):.1f} req/s"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +325,8 @@ def phase2(match_ids: list[int], limit: int, rate: float) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global log
+    log = get_logger("fetch_matches")
     parser = argparse.ArgumentParser(
         description="Collect Deadlock match data from deadlock-api.com",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -310,7 +355,7 @@ def main() -> None:
         match_ids = phase1(args.limit)
     else:
         match_ids = _load_all_match_ids()
-        print(f"[Phase 2] Loaded {len(match_ids)} match IDs from existing batch files")
+        log.info(f"[Phase 2] Loaded {len(match_ids)} match IDs from existing batch files")
 
     if args.phase in ("2", "all"):
         phase2(match_ids, limit=args.limit, rate=args.rate)
