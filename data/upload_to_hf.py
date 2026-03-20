@@ -23,6 +23,7 @@ from huggingface_hub import login, upload_folder
 
 REPO_ID = "sdxshuai/deadlock-match-forecast"
 RAW_DIR = Path("data/raw")
+TOKEN_FILE = Path(".hf_token")  # project-root token file (git-ignored)
 
 # Subdirectories to zip (many small files → single archive each)
 ZIP_DIRS = ["matches", "match_list", "player_stats"]
@@ -31,7 +32,8 @@ FLAT_DIRS = ["hero_stats"]
 
 
 def main() -> None:
-    login()  # reads HF_TOKEN env var or prompts interactively
+    token = TOKEN_FILE.read_text().strip() if TOKEN_FILE.exists() else None
+    login(token=token)  # falls back to HF_TOKEN env var or interactive prompt if token is None
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
