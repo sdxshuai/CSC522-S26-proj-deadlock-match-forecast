@@ -170,14 +170,17 @@ The following pre-match features are engineered during preprocessing:
 
 | Group | Features | Source |
 |---|---|---|
-| **Team composition** | `team0_hero_{0..5}`, `team1_hero_{0..5}` (one-hot) | Match |
+| **Team composition** | `t0_hero_{id}`, `t1_hero_{id}` — one-hot over 38 hero IDs (76 cols total) | Match players |
 | **Badge/rank** | `avg_badge_team0`, `avg_badge_team1`, `badge_diff` | Match metadata |
-| **Hero global stats** | `hero_win_rate`, `hero_kda` per hero pick | hero_stats |
-| **Hero counter** | `counter_score_t0_vs_t1`, `counter_score_t1_vs_t0` | hero_counter_stats |
-| **Hero synergy** | `synergy_score_team0`, `synergy_score_team1` | hero_synergy_stats |
-| **Player skill** | Per player: `player_wr` (overall), `player_hero_wr`, `player_kda`, `player_kills_per_min` | player hero_stats |
-| **Player rank** | Per player: `player_division`, `player_rank` (at match time) | player mmr |
-| **Match context** | `match_mode` (Ranked/Unranked), `duration_bucket` | Match metadata |
+| **Hero global stats** | `t0_global_wr`, `t1_global_wr` — team avg of per-hero global win rate | hero_stats |
+| **Hero counter** | `t0_counter_score`, `t1_counter_score` — avg counter advantage vs opposing team | hero_counter_stats |
+| **Hero synergy** | `t0_synergy_score`, `t1_synergy_score` — avg pairwise synergy within team | hero_synergy_stats |
+| **Player skill** | `t0_player_hero_wr`, `t1_player_hero_wr` — team avg player win rate on picked hero | player hero_stats |
+| **Player experience** | `t0_player_hero_matches`, `t1_player_hero_matches` — team avg matches played on hero | player hero_stats |
+| **Player rank** | `t0_player_rank`, `t1_player_rank` — team avg MMR rank at match time | player mmr |
+| **Match context** | `duration_bucket` (derived from `duration_s`) | Match metadata |
+
+Note: `match_mode` is excluded as current data is 100% Unranked (zero variance).
 
 Target: `label` = 1 if Team0 wins, 0 if Team1 wins.
 
@@ -192,8 +195,8 @@ Target: `label` = 1 if Team0 wins, 0 if Team1 wins.
 | Individual match JSON (slim) | 50,000 files | ~75 MB |
 | Player hero stats | ~50k account_ids | ~200 MB |
 | Player MMR | ~50k account_ids | ~100 MB |
-| Hero stats | ~60 heroes | < 1 MB |
-| **Processed feature matrix** | 10,000 rows × ~300 cols | ~30 MB |
+| Hero stats | 38 heroes | < 1 MB |
+| **Processed feature matrix** | 10,000 rows × ~100 cols | ~5 MB |
 
 ---
 
