@@ -164,25 +164,70 @@ Array of `MMRHistory` objects (one per match per player):
 
 ---
 
-## Feature Groups
+## Processed Dataset Schema
 
-The following pre-match features are engineered during preprocessing:
+`preprocess.py` joins all raw tables into one flat row per match.
+Players are ordered by `(team, player_slot)` and expanded as `t0_p0_*` … `t1_p5_*`.
+**No information is dropped** — individual player columns and team-level aggregations coexist.
 
-| Group | Features | Source |
+### Match-level columns (always present)
+
+| Column | Source | Notes |
 |---|---|---|
-| **Team composition** | `t0_hero_{id}`, `t1_hero_{id}` — one-hot over 38 hero IDs (76 cols total) | Match players |
-| **Badge/rank** | `avg_badge_team0`, `avg_badge_team1`, `badge_diff` | Match metadata |
-| **Hero global stats** | `t0_global_wr`, `t1_global_wr` — team avg of per-hero global win rate | hero_stats |
-| **Hero counter** | `t0_counter_score`, `t1_counter_score` — avg counter advantage vs opposing team | hero_counter_stats |
-| **Hero synergy** | `t0_synergy_score`, `t1_synergy_score` — avg pairwise synergy within team | hero_synergy_stats |
-| **Player skill** | `t0_player_hero_wr`, `t1_player_hero_wr` — team avg player win rate on picked hero | player hero_stats |
-| **Player experience** | `t0_player_hero_matches`, `t1_player_hero_matches` — team avg matches played on hero | player hero_stats |
-| **Player rank** | `t0_player_rank`, `t1_player_rank` — team avg MMR rank at match time | player mmr |
-| **Match context** | `duration_bucket` (derived from `duration_s`) | Match metadata |
+| `match_id` | match JSON | primary key |
+| `winning_team` | match JSON | 0 or 1 (integer) |
+| `label` | derived | 1 if Team0 wins, 0 if Team1 wins — **prediction target** |
+| `duration_s` | match JSON | match length in seconds |
+| `start_time` | match JSON | Unix timestamp |
+| `average_badge_team0` | match JSON | null for older matches (imputed) |
+| `average_badge_team1` | match JSON | null for older matches (imputed) |
+| `game_mode` | match JSON | integer enum |
 
-Note: `match_mode` is excluded as current data is 100% Unranked (zero variance).
+### Per-player columns (×12: `t0_p0_` … `t1_p5_`)
 
-Target: `label` = 1 if Team0 wins, 0 if Team1 wins.
+Players are sorted by `(team, player_slot)` within each match. `i` = 0..5 within team.
+
+| Column pattern | Source | Notes |
+|---|---|---|
+| `t{t}_p{i}_hero_id` | match JSON | hero picked |
+| `t{t}_p{i}_assigned_lane` | match JSON | integer lane assignment |
+| `t{t}_p{i}_player_slot` | match JSON | 0-11 global slot |
+| `t{t}_p{i}_account_id` | match JSON | player identifier |
+| `t{t}_p{i}_matches_played` | player hero_stats | total matches on this hero |
+| `t{t}_p{i}_wins` | player hero_stats | wins on this hero |
+| `t{t}_p{i}_kills_per_min` | player hero_stats | historical KPM on this hero |
+| `t{t}_p{i}_deaths_per_min` | player hero_stats | historical DPM on this hero |
+| `t{t}_p{i}_assists_per_min` | player hero_stats | historical APM on this hero |
+| `t{t}_p{i}_denies_per_match` | player hero_stats | |
+| `t{t}_p{i}_networth_per_min` | player hero_stats | |
+| `t{t}_p{i}_last_hits_per_min` | player hero_stats | |
+| `t{t}_p{i}_damage_per_min` | player hero_stats | |
+| `t{t}_p{i}_ending_level` | player hero_stats | avg hero level at match end |
+| `t{t}_p{i}_mmr_rank` | player MMR | rank at or before this match |
+| `t{t}_p{i}_mmr_division` | player MMR | rank // 10 |
+| `t{t}_p{i}_mmr_division_tier` | player MMR | rank % 10 |
+| `t{t}_p{i}_mmr_player_score` | player MMR | internal EMA score |
+| `t{t}_p{i}_global_hero_wins` | hero_stats | global wins for this hero |
+| `t{t}_p{i}_global_hero_matches` | hero_stats | global matches for this hero |
+
+Missing values (private profiles, new players): left as `NaN`.
+
+### Team-aggregation columns (redundant but convenient)
+
+Appended after all per-player columns. Each is a mean over the 6 players of that team.
+
+| Column | Aggregates |
+|---|---|
+| `t{t}_avg_mmr_rank` | `t{t}_p{i}_mmr_rank` |
+| `t{t}_avg_player_hero_wr` | `wins / matches_played` per player |
+| `t{t}_avg_player_hero_matches` | `t{t}_p{i}_matches_played` |
+| `t{t}_avg_global_hero_wr` | `global_hero_wins / global_hero_matches` per player |
+| `t{t}_avg_kills_per_min` | `t{t}_p{i}_kills_per_min` |
+| `t{t}_avg_deaths_per_min` | `t{t}_p{i}_deaths_per_min` |
+| `t{t}_avg_networth_per_min` | `t{t}_p{i}_networth_per_min` |
+| `t{t}_avg_ending_level` | `t{t}_p{i}_ending_level` |
+
+Note: `match_mode` is excluded (current data is 100% Unranked, zero variance). Hero counter/synergy stats are excluded from the flat join (pair-wise matrix, not naturally per-player); may be added later as separate aggregations.
 
 ---
 
@@ -196,7 +241,7 @@ Target: `label` = 1 if Team0 wins, 0 if Team1 wins.
 | Player hero stats | ~50k account_ids | ~200 MB |
 | Player MMR | ~50k account_ids | ~100 MB |
 | Hero stats | 38 heroes | < 1 MB |
-| **Processed feature matrix** | 10,000 rows × ~100 cols | ~5 MB |
+| **Processed feature matrix** | 10,000 rows × ~300 cols | ~20 MB |
 
 ---
 
