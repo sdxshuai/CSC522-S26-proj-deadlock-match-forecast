@@ -25,6 +25,9 @@ dependencies = [
     # Notebooks
     "jupyter>=1.0.0",
     "ipykernel>=6.0.0",
+    "huggingface-hub>=1.7.2",
+    "python-docx>=1.2.0",
+    "python-docs>=0.1.0",
 ]
 
 [tool.uv]

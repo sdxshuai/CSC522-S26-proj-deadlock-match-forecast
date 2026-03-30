@@ -1,7 +1,0 @@
-2026-03-20 17:35:19 [INFO ] Log file: /mnt/ncsudrive/x/xzhou38/CSC522-S26-proj-deadlock-match-forecast/data/logs/fetch_matches_20260320_173519.log
-2026-03-20 17:35:19 [INFO ] [Phase 1] Starting match list collection (already have 907 matches)
-2026-03-20 17:35:19 [INFO ]           Resuming from min_match_id=716174
-2026-03-20 17:35:19 [INFO ] [Phase 1] Done. Total listed: 907
-2026-03-20 17:35:19 [INFO ] [Phase 2] Need to fetch 50 individual match files (already have 100, target 50)
-2026-03-20 17:35:19 [INFO ]           Rate: 5.0 req/s | ETA ≈ 0.2 min
-2026-03-20 17:38:31 [INFO ] [Phase 2] Done. Fetched 50 new matches (total: 150)

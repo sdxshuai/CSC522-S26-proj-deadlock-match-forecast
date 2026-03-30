@@ -2,6 +2,15 @@
 data/raw/
 data/processed/
 
+# Script execution logs (auto-generated)
+data/logs/
+
+# Agent-generated working documents
+docs/*.md
+
+# Reference / example notebooks
+notebooks/example_template/
+
 # Results (generated outputs)
 results/plots/
 results/metrics/

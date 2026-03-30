@@ -1,6 +1,0 @@
-2026-03-20 17:49:02 [INFO ] Log file: /mnt/ncsudrive/x/xzhou38/CSC522-S26-proj-deadlock-match-forecast/data/logs/fetch_matches_20260320_174902.log
-2026-03-20 17:49:02 [INFO ] [Phase 1] Starting match list collection (already have 0 matches)
-2026-03-20 17:49:02 [INFO ]           Resuming from max_match_id=latest
-2026-03-20 17:49:02 [INFO ] Batch 0000: fetched 999, kept 956 | total=956 | elapsed=0.4s
-2026-03-20 17:49:02 [INFO ] Reached end of available matches.
-2026-03-20 17:49:02 [INFO ] [Phase 1] Done. Total listed: 956 | wall-time: 0.4s
