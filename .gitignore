@@ -39,6 +39,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.cursor/
 
 # Secrets
 .hf_token
