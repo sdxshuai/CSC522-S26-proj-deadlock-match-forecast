@@ -100,5 +100,4 @@ Full notes: [`midway_experiment_log.md`](midway_experiment_log.md)
 - **cell 15**: test set evaluation (full + ablation, all models)
   - full features: XGBoost test AUC 0.9971, LR 0.9966, RF 0.9957, acc all ~97%
   - no hero_wr: XGBoost test AUC 0.9943, LR 0.9927, RF 0.9853, acc 93–96%
-  - test vs val gap < 0.1% across all models — no overfitting
 
