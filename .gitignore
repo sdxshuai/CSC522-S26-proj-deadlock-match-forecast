@@ -1,3 +1,7 @@
+# docs — only results_log.md is tracked
+docs/*.md
+!docs/results_log.md
+
 # Data (raw API responses and processed datasets are not committed)
 data/raw/
 data/processed/
