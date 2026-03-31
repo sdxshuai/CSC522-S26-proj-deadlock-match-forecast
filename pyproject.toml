@@ -28,6 +28,7 @@ dependencies = [
     "huggingface-hub>=1.7.2",
     "python-docx>=1.2.0",
     "python-docs>=0.1.0",
+    "scipy>=1.15.3",
 ]
 
 [tool.uv]
