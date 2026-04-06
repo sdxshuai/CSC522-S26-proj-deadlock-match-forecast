@@ -23,8 +23,9 @@ OUT = ROOT / "data" / "processed"
 
 # All scalar fields from the player hero_stats records (join keys excluded)
 PLAYER_HS_FIELDS = [
-    "matches_played", "wins", "time_played", "last_played", "ending_level",
-    "kills", "deaths", "assists",
+    "matches_played", "wins", "time_played", "last_played", 
+    #"ending_level",
+    #"kills", "deaths", "assists",
     "kills_per_min", "deaths_per_min", "assists_per_min",
     "denies_per_match", "denies_per_min",
     "networth_per_min", "last_hits_per_min",
@@ -41,7 +42,9 @@ MMR_FIELDS = ["rank", "division", "division_tier", "player_score"]
 # Team aggregation specs: output_suffix -> [per-player field or None for derived]
 TEAM_AGG_STATS = [
     "kills_per_min", "deaths_per_min", "assists_per_min",
-    "networth_per_min", "ending_level", "damage_per_min",
+    "networth_per_min", 
+    #"ending_level",
+    "damage_per_min",
     "matches_played",
 ]
 
@@ -152,38 +155,47 @@ def process_match(match, player_hs, mmr, global_hs):
 def add_team_aggregations(df):
     for t in (0, 1):
         pfx = f"t{t}_"
-
-        # Per-player hero win rate (derived column, needed for avg)
+ 
+        # Per-player hero win rate — LEAKAGE FIX:
+        # wins/matches_played from the API are cumulative at query time and
+        # include the current match outcome (target leakage).
+        # label=1 → team 0 wins; label=0 → team 1 wins.
+        # team t won this match when t=0 and label=1, or t=1 and label=0.
+        team_won = (df["label"] == (1 - t)).astype(int)
         for i in range(6):
             w  = df[f"t{t}_p{i}_wins"]
             mp = df[f"t{t}_p{i}_matches_played"]
-            df[f"t{t}_p{i}_player_hero_wr"] = (w / mp).replace([np.inf], np.nan)
-
+            # subtract current match result before computing historical win rate
+            w_adj  = w  - team_won
+            mp_adj = mp - 1
+            df[f"t{t}_p{i}_player_hero_wr"] = (
+                w_adj / mp_adj
+            ).replace([np.inf, -np.inf], np.nan)
+ 
         df[pfx + "avg_player_hero_wr"] = df[
             [f"t{t}_p{i}_player_hero_wr" for i in range(6)]
         ].mean(axis=1)
-
+ 
         # Global hero win rate
         for i in range(6):
             gw = df[f"t{t}_p{i}_global_hero_wins"]
             gm = df[f"t{t}_p{i}_global_hero_matches"]
             df[f"t{t}_p{i}_global_hero_wr"] = (gw / gm).replace([np.inf], np.nan)
-
+ 
         df[pfx + "avg_global_hero_wr"] = df[
             [f"t{t}_p{i}_global_hero_wr" for i in range(6)]
         ].mean(axis=1)
-
+ 
         # Simple per-column means
         for stat in TEAM_AGG_STATS:
             cols = [f"t{t}_p{i}_{stat}" for i in range(6)]
             df[pfx + f"avg_{stat}"] = df[cols].mean(axis=1)
-
+ 
         df[pfx + "avg_mmr_rank"] = df[
             [f"t{t}_p{i}_mmr_rank" for i in range(6)]
         ].mean(axis=1)
-
+ 
     return df
-
 
 def main():
     parser = argparse.ArgumentParser()

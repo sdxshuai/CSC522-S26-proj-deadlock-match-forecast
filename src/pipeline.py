@@ -11,7 +11,10 @@ DROP_ID = (['match_id', 'start_time']
            + [f't{t}_p{p}_account_id' for t in range(2) for p in range(6)]
            + [f't{t}_p{p}_player_slot' for t in range(2) for p in range(6)])
 DROP_ZERO_VAR = ['game_mode']
-DROP_REDUNDANT = ['average_badge_team0', 'average_badge_team1']
+DROP_REDUNDANT = [
+    'average_badge_team0', 'average_badge_team1',
+] + [f't{t}_p{p}_{f}' for t in range(2) for p in range(6) 
+     for f in ['wins', 'kills', 'deaths', 'assists', 'time_played']]
 DROP_TEMPORAL = [f't{t}_p{p}_last_played' for t in range(2) for p in range(6)]
 DROP_FIXED = [f't{t}_p{p}_assigned_lane' for t in range(2) for p in range(6)]
 
@@ -24,7 +27,7 @@ def load_and_clean(parquet_path):
     hero_cols = [f't{t}_p{p}_hero_id' for t in range(2) for p in range(6)]
     df = df[~df[hero_cols].isna().any(axis=1)].reset_index(drop=True)
     y = df['label'].copy()
-    df_clean = df.drop(columns=ALL_DROP + ['label'])
+    df_clean = df.drop(columns=ALL_DROP + ['label'], errors='ignore')
     return df_clean, y
 
 
