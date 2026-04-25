@@ -23,6 +23,7 @@ META_COLS = ['match_id', 'start_time', 'label'] + [
 ]
 
 FA_DROP_FIELDS = ('wins', 'kills', 'deaths', 'assists', 'time_played')
+CLEAN_DROP_GROUPS = ('per_minute_rates', 'player_hero_wr', 'cumulative_counts')
 
 
 def _load_base_frame(parquet_path):
@@ -101,9 +102,22 @@ def _minimal_frame(df_feat):
     return df_feat[keep_cols].copy()
 
 
+def _clean_frame(df_feat, y):
+    df = _feature_analysis_frame(df_feat, y)
+    groups = feature_group_registry(df.columns)
+    drop_cols = sorted({
+        column
+        for group_name in CLEAN_DROP_GROUPS
+        for column in groups[group_name]
+    })
+    return df.drop(columns=drop_cols, errors='ignore').copy()
+
+
 def make_feature_frame(df_feat, y, feature_set='full'):
     if feature_set == 'full':
         return df_feat.copy()
+    if feature_set == 'clean':
+        return _clean_frame(df_feat, y)
     if feature_set == 'feature_analysis':
         return _feature_analysis_frame(df_feat, y)
     if feature_set == 'minimal':
@@ -162,8 +176,10 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = X.copy()
-        X['team_skill_gap'] = X['t0_avg_mmr_rank'] - X['t1_avg_mmr_rank']
-        X['experience_gap'] = X['t0_avg_matches_played'] - X['t1_avg_matches_played']
+        if {'t0_avg_mmr_rank', 't1_avg_mmr_rank'}.issubset(X.columns):
+            X['team_skill_gap'] = X['t0_avg_mmr_rank'] - X['t1_avg_mmr_rank']
+        if {'t0_avg_matches_played', 't1_avg_matches_played'}.issubset(X.columns):
+            X['experience_gap'] = X['t0_avg_matches_played'] - X['t1_avg_matches_played']
         return X
 
 
