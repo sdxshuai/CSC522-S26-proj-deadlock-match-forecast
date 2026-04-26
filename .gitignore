@@ -1,5 +1,6 @@
 # docs — only results_log.md is tracked
 docs/*.md
+docs/*.tex
 !docs/results_log.md
 !docs/leakage_analysis_report.md
 
@@ -42,6 +43,7 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+.github/
 
 # Secrets
 .hf_token
