@@ -93,20 +93,6 @@ Raw responses are saved to `data/raw/`. Processed datasets are saved to `data/pr
 
 See [data/README.md](data/README.md) for full schema documentation and data flow.
 
-## Feature Engineering & Training
-
-Run the notebooks in order:
-
-1. `notebooks/01_eda.ipynb` — Explore raw data distributions
-2. `notebooks/02_feature_engineering.ipynb` — Build feature matrix, analyze importance
-3. `notebooks/03_model_comparison.ipynb` — Train LR / RF / XGBoost / SVM / MLP, compare results, run ablation study
-
-## Results
-
-Evaluation metrics (Accuracy, AUC-ROC, F1, Brier Score) and plots are saved to `results/`.
-
----
-
 ## Known Data Risks & Limitations
 
 ### 1. Player data coverage is not guaranteed (high impact)
