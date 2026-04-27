@@ -1,0 +1,7 @@
+model,param_name,tested_values,best_value,best_position,next_action,rationale
+LR,C,"0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100",0.1,middle,keep_or_refine,best value is internal; narrow around the local optimum or add finer intermediate points
+XGB,learning_rate,"0.01, 0.03, 0.05, 0.1, 0.2, 0.3",0.05,middle,expand_lower_or_shift_down,mean CV score decreases monotonically across the tested range
+XGB,max_depth,"3, 4, 5, 6, 8, 10",4,middle,expand_lower_or_shift_down,mean CV score decreases monotonically across the tested range
+XGB,n_estimators,"100, 200, 300, 500, 700",300,middle,expand_lower_or_shift_down,mean CV score decreases monotonically across the tested range
+XGB,subsample,"0.6, 0.7, 0.8, 0.9, 1",0.9,middle,expand_lower_or_shift_down,mean CV score decreases monotonically across the tested range
+XGB,colsample_bytree,"0.5, 0.7, 0.8, 0.9, 1",0.7,middle,keep_or_refine,best value is internal; narrow around the local optimum or add finer intermediate points
