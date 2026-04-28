@@ -1,0 +1,4 @@
+model,best_params,cv_auc_mean,cv_auc_std,train_auc_mean,source_csv
+LR,{'C': 0.1},0.7484055515421318,0.0043459108284681,0.7514244139081467,hpsearch_lr_p2.csv
+RF,"{'n_estimators': 1100, 'min_samples_leaf': 6, 'max_features': 0.04, 'max_depth': 28}",0.7303740317490538,0.0047497734029877,0.9997685325842672,hpsearch_rf_p2.csv
+XGB,"{'subsample': 0.8, 'n_estimators': 650, 'max_depth': 4, 'learning_rate': 0.05, 'colsample_bytree': 0.8}",0.7491242533578784,0.0050747158299455,0.8281413353699877,hpsearch_xgb_p2.csv

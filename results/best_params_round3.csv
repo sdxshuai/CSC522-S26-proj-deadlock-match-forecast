@@ -1,0 +1,2 @@
+model,best_params,cv_auc_mean,cv_auc_std,train_auc_mean,source_csv
+XGB,"{'subsample': 0.8, 'reg_lambda': 8, 'reg_alpha': 0.05, 'n_estimators': 1100, 'min_child_weight': 2, 'max_depth': 3, 'learning_rate': 0.07, 'gamma': 0.2, 'colsample_bytree': 0.7}",0.7515669164865024,0.0051189200494155,0.8194064168754587,hpsearch_xgb_p2_round3.csv
