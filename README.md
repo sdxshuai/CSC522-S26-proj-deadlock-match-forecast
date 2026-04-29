@@ -93,6 +93,8 @@ Raw responses are saved to `data/raw/`. Processed datasets are saved to `data/pr
 
 See [data/README.md](data/README.md) for full schema documentation and data flow.
 
+Huggingface Address of the dataset we created: [https://huggingface.co/datasets/sdxshuai/deadlock-match-forecast]
+
 ## Known Data Risks & Limitations
 
 ### 1. Player data coverage is not guaranteed (high impact)
